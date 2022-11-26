@@ -1,4 +1,5 @@
 #include <ArduinoBLE.h>
+#include <reed_mux.h>
 
 BLEService ledService("180A"); // BLE LED Service
 
@@ -14,6 +15,7 @@ void setup() {
   pinMode(LEDG, OUTPUT);
   pinMode(LEDB, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
+  
 
   digitalWrite(LED_BUILTIN, LOW);         // when the central disconnects, turn off the LED
   digitalWrite(LEDR, HIGH);               // will turn the LED off
@@ -28,7 +30,7 @@ void setup() {
   }
 
   // set advertised local name and service UUID:
-  BLE.setLocalName(" ");
+  BLE.setLocalName("Arduino33BLE");
   BLE.setAdvertisedService(ledService);
 
   // add the characteristic to the service
