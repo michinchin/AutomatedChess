@@ -1,4 +1,5 @@
 #include <ArduinoBLE.h>
+// #include <gloabl.h> 
 
 /*
     File to specify Arduino BLE and interaction with the reed sensor mux chip. 
@@ -16,48 +17,70 @@
 */
 
 // MUX Pin Definitions //
-const int selectPins[4] = {19, 20, 21, 22}; // A0, A1, A2, A3
-const int com_output = 15; // Connect signal pin to 15
-const int enable_mux_pins[4] = {13, 7, 8, 9}; // D13, D7, D8, D9
+const int selectPins[4] = { 19, 20, 21, 22 };    // A0, A1, A2, A3
+const int com_output = 15;                       // Connect signal pin to 15
+const int enable_mux_pins[4] = { 13, 7, 8, 9 };  // D13, D7, D8, D9
 
-const int LED_ON_TIME = 500; // Each LED is on for 0.5s
+const int LED_ON_TIME = 500;  // Each LED is on for 0.5s
 int col_ind = 0;
 int row_ind = 0;
 int mux_num = 0;
-// Define the reed sensor matrix, numbered vertically
+// Define the reed sensor matrix, numbered vertically, 1 indicating empty
 int reed[8][8] = {
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1},
-    {0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0}
+  { 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 1, 1, 1, 1, 1, 1, 1, 1 },
+  { 1, 1, 1, 1, 1, 1, 1, 1 },
+  { 1, 1, 1, 1, 1, 1, 1, 1 },
+  { 1, 1, 1, 1, 1, 1, 1, 1 },
+  { 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
-BLEService ledService("180A"); // BLE LED Service
+BLEService ledService("180A");  // BLE LED Service
 
 // BLE LED Switch Characteristic - custom 128-bit UUID, read and writable by central
 BLEByteCharacteristic switchCharacteristic("2A57", BLERead | BLEWrite);
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial);
+  // while (!Serial);
 
-  // set LED's pin to output mode
-  pinMode(LEDR, OUTPUT);
-  pinMode(LEDG, OUTPUT);
-  pinMode(LEDB, OUTPUT);
-  pinMode(LED_BUILTIN, OUTPUT);
-  
+  setLEDPins();
+  setupBLE();
+  // Set up the MUX I/O
+  muxSetup();
+}
 
-  digitalWrite(LED_BUILTIN, LOW);         // when the central disconnects, turn off the LED
-  digitalWrite(LEDR, HIGH);               // will turn the LED off
-  digitalWrite(LEDG, HIGH);               // will turn the LED off
-  digitalWrite(LEDB, HIGH);                // will turn the LED off
+void loop() {
+  // listen for BLE peripherals to connect:
+  BLEDevice central = BLE.central();
 
-  // begin initialization
+  // if a central is connected to peripheral:
+  if (central) {
+    Serial.print("Connected to central: ");
+    // print the central's MAC address:
+    Serial.println(central.address());
+    digitalWrite(LED_BUILTIN, HIGH);  // turn on the LED to indicate the connection
+
+    // while the central is still connected to peripheral:
+    while (central.connected()) {
+      testLED();
+    }
+
+    // when the central disconnects, print it out:
+    Serial.print(F("Disconnected from central: "));
+    Serial.println(central.address());
+    turnOffLEDS();
+  }
+
+  // If a move has been completed, boolean move_complete == true
+  // Call functions to survey the mux
+  muxSurvey();
+}
+
+void setupBLE(){
+   // begin initialization
   if (!BLE.begin()) {
     Serial.println("starting Bluetooth® Low Energy failed!");
 
@@ -81,88 +104,81 @@ void setup() {
   BLE.advertise();
 
   Serial.println("BLE LED Peripheral");
-
-// Set up the MUX I/O
-  muxSetup();
 }
 
-void loop() {
-  // listen for BLE peripherals to connect:
-  BLEDevice central = BLE.central();
-
-  // if a central is connected to peripheral:
-  if (central) {
-    Serial.print("Connected to central: ");
-    // print the central's MAC address:
-    Serial.println(central.address());
-    digitalWrite(LED_BUILTIN, HIGH);            // turn on the LED to indicate the connection
-
-    // while the central is still connected to peripheral:
-    while (central.connected()) {
-      // if the remote device wrote to the characteristic,
-      // use the value to control the LED:
-      if (switchCharacteristic.written()) {
-        switch (switchCharacteristic.value()) {   // any value other than 0
-          case 01:
-            Serial.println("Red LED on");
-            digitalWrite(LEDR, LOW);            // will turn the LED on
-            digitalWrite(LEDG, HIGH);         // will turn the LED off
-            digitalWrite(LEDB, HIGH);         // will turn the LED off
-            break;
-          case 02:
-            Serial.println("Green LED on");
-            digitalWrite(LEDR, HIGH);         // will turn the LED off
-            digitalWrite(LEDG, LOW);        // will turn the LED on
-            digitalWrite(LEDB, HIGH);        // will turn the LED off
-            break;
-          case 03:
-            Serial.println("Blue LED on");
-            digitalWrite(LEDR, HIGH);         // will turn the LED off
-            digitalWrite(LEDG, HIGH);       // will turn the LED off
-            digitalWrite(LEDB, LOW);         // will turn the LED on
-            break;
-          default:
-            Serial.println(F("LEDs off"));
-            digitalWrite(LEDR, HIGH);        // will turn the LED off
-            digitalWrite(LEDG, HIGH);        // will turn the LED off
-            digitalWrite(LEDB, HIGH);        // will turn the LED off
-            break;
-        }
-      }
+void turnOffLEDS() {
+  digitalWrite(LED_BUILTIN, LOW);  // when the central disconnects, turn off the LED
+  digitalWrite(LEDR, HIGH);        // will turn the LED off
+  digitalWrite(LEDG, HIGH);        // will turn the LED off
+  digitalWrite(LEDB, HIGH);        // will turn the LED off
+}
+/*
+  Testing LEDs using BLE
+*/
+void testLED() {
+  // if the remote device wrote to the characteristic,
+  // use the value to control the LED:
+  if (switchCharacteristic.written()) {
+    switch (switchCharacteristic.value()) {  // any value other than 0
+      case 01:
+        Serial.println("Red LED on");
+        digitalWrite(LEDR, LOW);   // will turn the LED on
+        digitalWrite(LEDG, HIGH);  // will turn the LED off
+        digitalWrite(LEDB, HIGH);  // will turn the LED off
+        break;
+      case 02:
+        Serial.println("Green LED on");
+        digitalWrite(LEDR, HIGH);  // will turn the LED off
+        digitalWrite(LEDG, LOW);   // will turn the LED on
+        digitalWrite(LEDB, HIGH);  // will turn the LED off
+        break;
+      case 03:
+        Serial.println("Blue LED on");
+        digitalWrite(LEDR, HIGH);  // will turn the LED off
+        digitalWrite(LEDG, HIGH);  // will turn the LED off
+        digitalWrite(LEDB, LOW);   // will turn the LED on
+        break;
+      default:
+        Serial.println(F("LEDs off"));
+        digitalWrite(LEDR, HIGH);  // will turn the LED off
+        digitalWrite(LEDG, HIGH);  // will turn the LED off
+        digitalWrite(LEDB, HIGH);  // will turn the LED off
+        break;
     }
-
-    // when the central disconnects, print it out:
-    Serial.print(F("Disconnected from central: "));
-    Serial.println(central.address());
-    digitalWrite(LED_BUILTIN, LOW);         // when the central disconnects, turn off the LED
-    digitalWrite(LEDR, HIGH);          // will turn the LED off
-    digitalWrite(LEDG, HIGH);        // will turn the LED off
-    digitalWrite(LEDB, HIGH);         // will turn the LED off
   }
+}
 
-  // If a move has been completed, boolean move_complete == true
-  // Call functions to survey the mux 
-  muxSurvey();
+void setLEDPins() {
+  // set LED's pin to output mode
+  pinMode(LEDR, OUTPUT);
+  pinMode(LEDG, OUTPUT);
+  pinMode(LEDB, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  digitalWrite(LED_BUILTIN, LOW);  // when the central disconnects, turn off the LED
+  digitalWrite(LEDR, HIGH);        // will turn the LED off
+  digitalWrite(LEDG, HIGH);        // will turn the LED off
+  digitalWrite(LEDB, HIGH);        // will turn the LED off
 }
 
 /*
   Mux Initialize Function. To be used in void setup()
 */
 void muxSetup() {
-    for (int i=0; i<4; i++) {
-        // Set up select pins as outputs
-        pinMode(selectPins[i], OUTPUT);
-        digitalWrite(selectPins[i], LOW);
+  for (int i = 0; i < 4; i++) {
+    // Set up select pins as outputs
+    pinMode(selectPins[i], OUTPUT);
+    digitalWrite(selectPins[i], LOW);
 
-        // Set up enable pins as outputs
-        pinMode(enable_mux_pins[i], OUTPUT);
-        digitalWrite(enable_mux_pins[i], LOW); //FIXME: check pull up/down on EN
-    }
-    pinMode(com_output, INPUT); // Set up COM as an input
-    
-    // Print the header:
-    Serial.println("Y0\tY1\tY2\tY3\tY4\tY5\tY6\tY7");
-    Serial.println("---\t---\t---\t---\t---\t---\t---\t---");
+    // Set up enable pins as outputs
+    pinMode(enable_mux_pins[i], OUTPUT);
+    digitalWrite(enable_mux_pins[i], LOW);  //FIXME: check pull up/down on EN
+  }
+  pinMode(com_output, INPUT);  // Set up COM as an input
+
+  // Print the header:
+  Serial.println("Y0\tY1\tY2\tY3\tY4\tY5\tY6\tY7");
+  Serial.println("---\t---\t---\t---\t---\t---\t---\t---");
 }
 
 
@@ -174,14 +190,14 @@ void muxSetup() {
     3. Use AnalogRead to get the value from the pin
 */
 void muxSurvey() {
-  // TODO: Figure out how to index across the 4 muxes 
-  for (int pin=0; pin < 64; pin++) {
-      selectMuxPin(pin);
-      col_ind = pin / 8; // calculate the column number  
-      row_ind = pin % 8; // calculate the row number 
-      mux_num = pin / 16; // calculate the mux number 
-      reed[row_ind][col_ind] = analogRead(com_output);
-      Serial.print(String(reed[row_ind][col_ind]) + "\t");
+  // TODO: Figure out how to index across the 4 muxes
+  for (int pin = 0; pin < 64; pin++) {
+    selectMuxPin(pin);
+    col_ind = pin / 8;   // calculate the column number
+    row_ind = pin % 8;   // calculate the row number
+    mux_num = pin / 16;  // calculate the mux number
+    reed[row_ind][col_ind] = analogRead(com_output);
+    Serial.print(String(reed[row_ind][col_ind]) + "\t");
   }
 }
 
@@ -190,13 +206,13 @@ void muxSurvey() {
     Function to set the select pins for each mux 
 */
 void selectMuxPin(byte pin) {
-    if (pin > 63) return; // pin is out of scope
-    // For each pin, calculate the corresponding binary
-    // toggle select pins output to match the binary value 
-    for (int i = 0; i < 4; i++) {
-        if (pin & (1<<i))
-            digitalWrite(selectPins[i], HIGH);
-        else 
-            digitalWrite(selectPins[i], LOW);
-    }
+  if (pin > 63) return;  // pin is out of scope
+  // For each pin, calculate the corresponding binary
+  // toggle select pins output to match the binary value
+  for (int i = 0; i < 4; i++) {
+    if (pin & (1 << i))
+      digitalWrite(selectPins[i], HIGH);
+    else
+      digitalWrite(selectPins[i], LOW);
+  }
 }
