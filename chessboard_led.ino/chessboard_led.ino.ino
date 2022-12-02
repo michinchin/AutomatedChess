@@ -13,17 +13,21 @@
         EN --------------------- 13, 7, 8, 9
         VCC -------------------- 3V3
         GND -------------------- GND
+
+        Magnet ----------------- 6
 */
 
 // MUX Pin Definitions //
 const int selectPins[4] = {19, 20, 21, 22}; // A0, A1, A2, A3
 const int com_output = 15; // Connect signal pin to 15
 const int enable_mux_pins[4] = {13, 7, 8, 9}; // D13, D7, D8, D9
+const int magnetPin = 6; // Connect to magnet 
 
 const int LED_ON_TIME = 500; // Each LED is on for 0.5s
 int col_ind = 0;
 int row_ind = 0;
 int mux_num = 0;
+int magnetOn = 0;
 // Define the reed sensor matrix, numbered vertically
 int reed[8][8] = {
     {0, 0, 0, 0, 0, 0, 0, 0},
@@ -84,6 +88,8 @@ void setup() {
 
 // Set up the MUX I/O
   muxSetup();
+// Set up the Magnet I/O
+  magSetup();
 }
 
 void loop() {
@@ -161,11 +167,42 @@ void muxSetup() {
     pinMode(com_output, INPUT); // Set up COM as an input
     
     // Print the header:
-    Serial.println("Y0\tY1\tY2\tY3\tY4\tY5\tY6\tY7");
-    Serial.println("---\t---\t---\t---\t---\t---\t---\t---");
+    // Serial.println("Y0\tY1\tY2\tY3\tY4\tY5\tY6\tY7");
+    // Serial.println("---\t---\t---\t---\t---\t---\t---\t---");
 }
 
+/*
+  Magnet Initialize Function. To be used in void setup()
+*/
+void magSetup() {
+  pinMode(magnetPin, OUTPUT);
+  digitalWrite(magnetPin, LOW);
+  Serial.println("Magnet initialization complete.");
+}
 
+void magControl() {
+  while(1) {
+    magnetOn = Serial.read();
+    // if magnet is turned on, turn on all LEDS
+    if (magnetOn == '1') { 
+      digitalWrite(LEDR, HIGH);
+      digitalWrite(LEDG, LOW);     
+      digitalWrite(LEDB, LOW); 
+      delay(1000);                  // waits for a second  
+      // Drive pin 6 HIGH
+      digitalWrite(magnetPin, LOW);
+      Serial.println("Magnet off");   
+    } else {
+      digitalWrite(LEDR, LOW);
+      digitalWrite(LEDG, HIGH);     
+      digitalWrite(LEDB, HIGH); 
+      delay(1000);                  // waits for a second  
+      // Drive pin 6 LOW
+      digitalWrite(magnetPin, LOW); 
+      Serial.println("Magnet off");  
+    }
+  }
+}
 
 /*
     MUX Survey function. To access each pin:
