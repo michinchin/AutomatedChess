@@ -1,5 +1,5 @@
 #include <ArduinoBLE.h>
-// #include <gloabl.h> 
+#include <global.h> 
 
 /*
     File to specify Arduino BLE and interaction with the reed sensor mux chip. 
@@ -41,11 +41,11 @@ int reed[8][8] = {
   { 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
-BLEService ledService("180A");  // BLE LED Service
+// BLE Setup
 
-// BLE LED Switch Characteristic - custom 128-bit UUID, read and writable by central
-// 2A57
-BLEByteCharacteristic switchCharacteristic("f1b417b2-6e69-412a-8b13-ce91a48cdd90", BLERead | BLEWrite);
+BLEService periphService("4400b98a-0b70-4253-b250-d60e21f0f224");  // BLE  Service
+BLEByteCharacteristic redCharacteristic("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite);
+BLEByteCharacteristic greenCharacteristic("596a72cf-7acc-4181-a9d1-dbf30db2aa7b", BLERead | BLEWrite);
 
 void setup() {
   Serial.begin(9600);
@@ -71,7 +71,7 @@ void loop() {
 
     // while the central is still connected to peripheral:
     while (central.connected()) {
-      testLED();
+      testLEDS();
     }
 
     // when the central disconnects, print it out:
@@ -96,16 +96,18 @@ void setupBLE(){
 
   // set advertised local name and service UUID:
   BLE.setLocalName("Arduino33BLE");
-  BLE.setAdvertisedService(ledService);
+  BLE.setAdvertisedService(periphService);
 
   // add the characteristic to the service
-  ledService.addCharacteristic(switchCharacteristic);
+  periphService.addCharacteristic(redCharacteristic);
+  periphService.addCharacteristic(greenCharacteristic);
 
   // add service
-  BLE.addService(ledService);
+  BLE.addService(periphService);
 
   // set the initial value for the characteristic:
-  switchCharacteristic.writeValue(0);
+  redCharacteristic.writeValue(0);
+  greenCharacteristic.writeValue(0);
 
   // start advertising
   BLE.advertise();
@@ -117,39 +119,34 @@ void turnOffLEDS() {
   digitalWrite(LED_BUILTIN, LOW);  // when the central disconnects, turn off the LED
   digitalWrite(LEDR, HIGH);        // will turn the LED off
   digitalWrite(LEDG, HIGH);        // will turn the LED off
-  digitalWrite(LEDB, HIGH);        // will turn the LED off
 }
 /*
   Testing LEDs using BLE
 */
-void testLED() {
+void testLEDS() {
   // if the remote device wrote to the characteristic,
   // use the value to control the LED:
-  if (switchCharacteristic.written()) {
-    switch (switchCharacteristic.value()) {  // any value other than 0
+  if (redCharacteristic.written()) {
+    switch (redCharacteristic.value()) {  // any value other than 0
       case 01:
         Serial.println("Red LED on");
         digitalWrite(LEDR, LOW);   // will turn the LED on
-        digitalWrite(LEDG, HIGH);  // will turn the LED off
-        digitalWrite(LEDB, HIGH);  // will turn the LED off
-        break;
-      case 02:
-        Serial.println("Green LED on");
-        digitalWrite(LEDR, HIGH);  // will turn the LED off
-        digitalWrite(LEDG, LOW);   // will turn the LED on
-        digitalWrite(LEDB, HIGH);  // will turn the LED off
-        break;
-      case 03:
-        Serial.println("Blue LED on");
-        digitalWrite(LEDR, HIGH);  // will turn the LED off
-        digitalWrite(LEDG, HIGH);  // will turn the LED off
-        digitalWrite(LEDB, LOW);   // will turn the LED on
         break;
       default:
         Serial.println(F("LEDs off"));
         digitalWrite(LEDR, HIGH);  // will turn the LED off
+        break;
+    }
+  }
+  if (greenCharacteristic.written()) {
+    switch (greenCharacteristic.value()) {  // any value other than 0
+      case 01:
+        Serial.println("Green LED on");
+        digitalWrite(LEDG, LOW);  // will turn the LED on
+        break;
+      default:
+        Serial.println(F("Green LEDs off"));
         digitalWrite(LEDG, HIGH);  // will turn the LED off
-        digitalWrite(LEDB, HIGH);  // will turn the LED off
         break;
     }
   }
