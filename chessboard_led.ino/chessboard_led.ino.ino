@@ -1,5 +1,4 @@
 #include <ArduinoBLE.h>
-#include <global.h> 
 
 /*
     File to specify Arduino BLE and interaction with the reed sensor mux chip. 
@@ -44,8 +43,8 @@ int reed[8][8] = {
 // BLE Setup
 
 BLEService periphService("4400b98a-0b70-4253-b250-d60e21f0f224");  // BLE  Service
-BLEByteCharacteristic redCharacteristic("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite);
-BLEByteCharacteristic greenCharacteristic("596a72cf-7acc-4181-a9d1-dbf30db2aa7b", BLERead | BLEWrite);
+BLEByteCharacteristic currLocCharacteristic("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite);
+BLEByteCharacteristic destLocCharacteristic("596a72cf-7acc-4181-a9d1-dbf30db2aa7b", BLERead | BLEWrite);
 
 void setup() {
   Serial.begin(9600);
@@ -71,7 +70,7 @@ void loop() {
 
     // while the central is still connected to peripheral:
     while (central.connected()) {
-      testLEDS();
+      testBLE();
     }
 
     // when the central disconnects, print it out:
@@ -99,15 +98,15 @@ void setupBLE(){
   BLE.setAdvertisedService(periphService);
 
   // add the characteristic to the service
-  periphService.addCharacteristic(redCharacteristic);
-  periphService.addCharacteristic(greenCharacteristic);
+  periphService.addCharacteristic(currLocCharacteristic);
+  periphService.addCharacteristic(destLocCharacteristic);
 
   // add service
   BLE.addService(periphService);
 
   // set the initial value for the characteristic:
-  redCharacteristic.writeValue(0);
-  greenCharacteristic.writeValue(0);
+  currLocCharacteristic.writeValue(0);
+  destLocCharacteristic.writeValue(0);
 
   // start advertising
   BLE.advertise();
@@ -123,32 +122,14 @@ void turnOffLEDS() {
 /*
   Testing LEDs using BLE
 */
-void testLEDS() {
+void testBLE() {
   // if the remote device wrote to the characteristic,
   // use the value to control the LED:
-  if (redCharacteristic.written()) {
-    switch (redCharacteristic.value()) {  // any value other than 0
-      case 01:
-        Serial.println("Red LED on");
-        digitalWrite(LEDR, LOW);   // will turn the LED on
-        break;
-      default:
-        Serial.println(F("LEDs off"));
-        digitalWrite(LEDR, HIGH);  // will turn the LED off
-        break;
-    }
+  if (currLocCharacteristic.written()) {
+    Serial.println(currLocCharacteristic.value()) // use this curr loc value to find path
   }
-  if (greenCharacteristic.written()) {
-    switch (greenCharacteristic.value()) {  // any value other than 0
-      case 01:
-        Serial.println("Green LED on");
-        digitalWrite(LEDG, LOW);  // will turn the LED on
-        break;
-      default:
-        Serial.println(F("Green LEDs off"));
-        digitalWrite(LEDG, HIGH);  // will turn the LED off
-        break;
-    }
+  if (destLocCharacteristic.written()) {
+    Serial.println(destLocCharacteristic.value()) // use this dest loc value to find path
   }
 }
 
