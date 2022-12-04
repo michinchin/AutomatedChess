@@ -18,10 +18,12 @@ dest_uuid = "596a72cf-7acc-4181-a9d1-dbf30db2aa7b"
 async def setInput(client):
     command = input("Please enter move (i.e. 1 0):")
     cmds = command.split(' ')
+    # print(, int(cmds[1]))
+    # await client.write_gatt_char(curr_uuid, bytearray[b'' + int(cmds[0])], True)
     
-    await client.write_gatt_char(curr_uuid, cmds[0])
-    await client.write_gatt_char(dest_uuid, cmds[1])
-
+    # await client.write_gatt_char(dest_uuid,  bytes(int(cmds[0])]), True) # decode with size of  
+    await client.write_gatt_char(dest_uuid,  bytes(cmds[0].encode('UTF-8')), True) # will need to decode
+    await client.write_gatt_char(dest_uuid,  bytes(cmds[1].encode('UTF-8')), True) # will need to decode
 
 async def run():
     print('Looking for nano ble peripheral')
