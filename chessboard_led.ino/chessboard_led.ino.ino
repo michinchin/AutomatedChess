@@ -126,10 +126,10 @@ void testBLE() {
   // if the remote device wrote to the characteristic,
   // use the value to control the LED:
   if (currLocCharacteristic.written()) {
-    Serial.println(sizeof(currLocCharacteristic.value())); // use this curr loc value to find path
+    Serial.println(currLocCharacteristic.value()) // use this curr loc value to find path
   }
   if (destLocCharacteristic.written()) {
-    Serial.println(sizeof(destLocCharacteristic.value())); // use this dest loc value to find path
+    Serial.println(destLocCharacteristic.value()) // use this dest loc value to find path
   }
 }
 
