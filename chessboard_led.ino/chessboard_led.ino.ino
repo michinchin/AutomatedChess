@@ -1,5 +1,7 @@
 #include <ArduinoBLE.h>
 #include <path.c>
+#include <LiquidCrystal.h>
+
 
 /*
     File to specify Arduino BLE and interaction with the reed sensor mux chip.
@@ -29,6 +31,10 @@ const int ENABLE_MUX_PINS[4] = {13, 7, 8, 9}; // D13, D7, D8, D9
 const int COM_PIN = 15;
 const int MAGNET_PIN = 6;
 const int LED_ON_TIME = 500;  // Each LED is on for 0.5s
+// LCD
+const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
 
 BLEService service("4400b98a-0b70-4253-b250-d60e21f0f224");
 BLEByteCharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite);
@@ -36,6 +42,9 @@ BLEByteCharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | 
 void setup() {
   Serial.begin(9600);
   while (!Serial);
+
+  lcd.begin(16, 2);
+  lcd.print("hello, world!");
 
   setupBLE();
   setupMux();
@@ -57,11 +66,10 @@ void setupBLE(){
 
   BLE.setLocalName("AutomatedChess");
   BLE.setAdvertisedService(service);
-  service.addCharacteristic(currLocCharacteristic);
-  service.addCharacteristic(destLocCharacteristic);
+  service.addCharacteristic(command);
+  // service.addCharacteristic(currLocCharacteristic);
   BLE.addService(service);
-  currLocCharacteristic.writeValue(0);
-  destLocCharacteristic.writeValue(0);
+  // currLocCharacteristic.writeValue(0);
   BLE.advertise();
 }
 
@@ -105,6 +113,7 @@ void loop() {
 void waitAndExecuteCommand() {
   while (!command.written());
   Serial.println(command.value());
+  lcd.print(command.value());
 
   // TODO: parse command such that the following are fully qualified by the command.value()
   int src = 2;
