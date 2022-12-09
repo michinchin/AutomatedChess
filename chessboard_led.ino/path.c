@@ -1,10 +1,10 @@
 #include "stdio.h"
 
-int queue[1024];
+char queue[1024];
 char visited[225];
 char board[64];
-int l = 0;
-int r = 0;
+static int left = 0;
+static int right = 0;
 
 int translate15(int sq) {
 	int x = sq % 8;
@@ -27,18 +27,18 @@ void add(int x, int y, int mv) {
 	int t = translate8(sq);
 	if (t != -1 && board[t]) return;
 	visited[sq] = mv;
-	queue[r++] = sq;
+	queue[right++] = sq;
 }
 
 void findPath(int dst, int st, int* loc) {
 	for (int i=0; i<225; i++) visited[i] = 0;
 	st = translate15(st);
 	dst = translate15(dst);
-	l=0, r=0;
-	queue[r++] = st;
+	left=0, right=0;
+	queue[right++] = st;
 
-	while (l != r) {
-		int t = queue[l++];
+	while (left != right) {
+		int t = queue[left++];
 		int x = t % 15;
 		int y = t / 15;
 

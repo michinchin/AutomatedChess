@@ -1,7 +1,7 @@
-#include <ArduinoBLE.h>
-#include <path.c>
-#include <LiquidCrystal.h>
+// #include <ArduinoBLE.h>
 
+#include <LiquidCrystal.h>
+#include "path.c"
 
 /*
     File to specify Arduino BLE and interaction with the reed sensor mux chip.
@@ -36,8 +36,8 @@ const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 
-BLEService service("4400b98a-0b70-4253-b250-d60e21f0f224");
-BLEByteCharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite);
+// BLEService service("4400b98a-0b70-4253-b250-d60e21f0f224");
+// BLEByteCharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite);
 
 void setup() {
   Serial.begin(9600);
@@ -46,31 +46,30 @@ void setup() {
   lcd.begin(16, 2);
   lcd.print("hello, world!");
 
-  setupBLE();
+  // setupBLE();
   setupMux();
   setupMagnet();
-  currentState = CONNECT;
 
-  pinMode(LEDR, OUTPUT);
-  pinMode(LEDG, OUTPUT);
-  pinMode(LEDB, OUTPUT);
+  // pinMode(LEDR, OUTPUT);
+  // pinMode(LEDG, OUTPUT);
+  // pinMode(LEDB, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void setupBLE(){
-  if (!BLE.begin()) {
-    Serial.println("starting Bluetooth® Low Energy failed!");
-    digitalWrite(LEDR, HIGH);
-    while (1);
-  }
+  // if (!BLE.begin()) {
+  //   Serial.println("starting Bluetooth® Low Energy failed!");
+  //   // digitalWrite(LEDR, HIGH);
+  //   while (1);
+  // }
 
-  BLE.setLocalName("AutomatedChess");
-  BLE.setAdvertisedService(service);
-  service.addCharacteristic(command);
+  // BLE.setLocalName("AutomatedChess");
+  // BLE.setAdvertisedService(service);
+  // service.addCharacteristic(command);
   // service.addCharacteristic(currLocCharacteristic);
-  BLE.addService(service);
+  // BLE.addService(service);
   // currLocCharacteristic.writeValue(0);
-  BLE.advertise();
+  // BLE.advertise();
 }
 
 void setupMux() {
@@ -90,30 +89,32 @@ void setupMagnet() {
 
 void loop() {
   // Wait until device is connected, check every second and blink built-in led.
-  BLEDevice central;
-  while (central = BLE.central(); !central) {
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(500);
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(500);
-  }
+  // BLEDevice central;
+  // while (central = BLE.central(); !central) {
+  //   digitalWrite(LED_BUILTIN, HIGH);
+  //   delay(500);
+  //   digitalWrite(LED_BUILTIN, LOW);
+  //   delay(500);
+  // }
 
-  if (central) {
-    Serial.printf("Connected to central: %s\n", central.address());
-    digitalWrite(LED_BUILTIN, HIGH);  // turn on the LED to indicate the connection
-    while (central.connected()) {
-      scanBoard();
-      waitAndExecuteCommand();
-    }
-    digitalWrite(LED_BUILTIN, LOW);  // turn on the LED to indicate the connection
-    Serial.printf("Disconnected to central: %s\n", central.address());
-  }
+  // if (central) {
+  //   Serial.printf("Connected to central: %s\n", central.address());
+  //   digitalWrite(LED_BUILTIN, HIGH);  // turn on the LED to indicate the connection
+  //   while (central.connected()) {
+  //     scanBoard();
+  //     waitAndExecuteCommand();
+  //   }
+  //   digitalWrite(LED_BUILTIN, LOW);  // turn on the LED to indicate the connection
+  //   Serial.printf("Disconnected to central: %s\n", central.address());
+  // }
+  waitAndExecuteCommand();
 }
 
 void waitAndExecuteCommand() {
-  while (!command.written());
-  Serial.println(command.value());
-  lcd.print(command.value());
+  // while (!command.written());
+  // Serial.println(command.value());
+  String s = Serial.readString();
+  lcd.print(s);
 
   // TODO: parse command such that the following are fully qualified by the command.value()
   int src = 2;
@@ -133,11 +134,11 @@ void waitAndExecuteCommand() {
    2. Select Mux Pin function with pin number
    3. Use AnalogRead to get the value from the pin */
 void scanBoard() {
-  digitalWrite(LEDB, HIGH);
+  // digitalWrite(LEDB, HIGH);
   for (int square=0; square<64; square++) {
     for (int i = 0; i < 4; i++)
       digitalWrite(SELECT_PINS[i], square & (1<<i) ? HIGH : LOW);
     board[square] = analogRead(COM_PIN);
   }
-  digitalWrite(LEDB, LOW);
+  // digitalWrite(LEDB, LOW);
 }
