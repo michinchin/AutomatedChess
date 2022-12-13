@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-// #include <ArduinoBLE.h>
-#include <LiquidCrystal.h>
-=======
 #include <ArduinoBLE.h>
 /* #include <LiquidCrystal.h> */
->>>>>>> 8298e95 (Integrate more parts)
 #include "path.c"
 
 /*
