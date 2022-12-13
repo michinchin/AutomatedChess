@@ -1,5 +1,6 @@
 #include <ArduinoBLE.h>
-/* #include <LiquidCrystal.h> */
+// #include <LiquidCrystal.h>
+#include <ezButton.h>
 #include "path.c"
 
 /*
@@ -19,10 +20,10 @@
         Magnet ----------------- 6
 
         Motor Control 
-        Dir 1 ------------------ 4
-        Step 1 ----------------- 5
-        Dir 2 ------------------ 2
-        Step 2 ----------------- 3       
+        Dir 1 ------------------ 5
+        Step 1 ----------------- 4
+        Dir 2 ------------------ 3
+        Step 2 ----------------- 2       
 */
 
 // LED_BUILTIN = Bluetooth Connection Status
@@ -35,6 +36,21 @@ const int SELECT_PINS[4] = {19, 20, 21, 22}; // A0, A1, A2, A3
 const int ENABLE_MUX_PINS[4] = {13, 7, 8, 9}; // D13, D7, D8, D9
 const int COM_PIN = 15;
 const int MAGNET_PIN = 6;
+const int dirPin1 = 5;
+const int stepPin1 = 4;
+const int dirPin2 = 3;
+const int stepPin2 = 2;
+const int stepsPerRevolution = 200;
+const int LED_ON_TIME = 500;  // Each LED is on for 0.5s
+int callibrationComplete = 0;
+//ezButton switch1(11);
+//ezButton switch2(10);
+const int switch1 = 11;
+const int switch2 = 10;
+
+// LCD
+const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 const int DIR1_PIN = 5;
 const int DIR2_PIN = 3;
@@ -52,10 +68,16 @@ void setup() {
   Serial.begin(9600);
   while (!Serial);
 
-  setupBLE();
+  lcd.begin(16, 2);
+  lcd.print("hello, world!");
+//  switch1.setDebounceTime(50);
+//  switch2.setDebounceTime(50);
+//  setupBLE();
   setupMux();
   setupMagnet();
   setupMotor();
+  setupSwitches();
+//  currentState = CONNECT;
 
   pinMode(LEDR, OUTPUT);
   pinMode(LEDG, OUTPUT);
@@ -90,10 +112,38 @@ void setupMux() {
   pinMode(COM_PIN, INPUT);
 }
 
+void setupSwitches() {
+  pinMode(switch1, INPUT);
+  pinMode(switch2, INPUT);
+}
+
 void setupMagnet() {
   pinMode(MAGNET_PIN, OUTPUT);
   digitalWrite(MAGNET_PIN, LOW);
 }
+
+void setupMotor() {
+  pinMode(dirPin1, OUTPUT);
+  pinMode(dirPin2, OUTPUT);
+  pinMode(stepPin1, OUTPUT);
+  pinMode(stepPin2, OUTPUT);
+}
+
+//void switchCallibration(){
+//  switch1.loop();
+//  switch2.loop();
+//  int pressed1 = switch1.getState();
+//  int pressed2 = switch2.getState();
+// 
+//  if(pressed1 == HIGH) {
+//    callibrationComplete = 1;    
+//  }
+//  if ((callibrationComplete == 1) & pressed2) {
+//    callibrationComplete = 2; 
+//  }
+//  Serial.println("Current callibration status is");
+//  Serial.println(callibrationComplete);
+//}
 
 void loop() {
   // Wait until device is connected, check every second and blink built-in led.
@@ -120,6 +170,13 @@ void loop() {
     digitalWrite(LED_BUILTIN, LOW);
   }
   delay(500);
+  
+  //  switchCallibration();
+  Serial.println("Switch report.");
+  Serial.println(switch1, switch2);
+  if (callibrationComplete == 2) {
+    Serial.println("Callibration complete, proceed with game");
+  }
 }
 
 void executeCommand() {
@@ -202,5 +259,41 @@ void printBoard() {
     for (int col=0; col<8; col++)
       Serial.print(board[row*8+col] ? 'X' : '.');
     Serial.print('\n');
+  }
+}
+
+
+void driveMotors() {
+  
+  for (int cnt=0; cnt<4; cnt++) {
+    if (cnt==0){
+      digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
+      digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
+    }
+    if (cnt==1){
+      digitalWrite(dirPin1, LOW); // Set motor 1 to clockwise
+      digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
+    }
+    if (cnt==2){
+      digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
+    }
+    if (cnt==3){
+      digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
+      digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
+    }
+
+    Serial.println("Turning magnet on");
+    digitalWrite(LEDR, HIGH);
+    digitalWrite(LEDB, HIGH);
+    digitalWrite(LEDG, HIGH);
+    
+    for (int i=0; i<4*stepsPerRevolution; i++) {
+      digitalWrite(stepPin1, HIGH);
+      digitalWrite(stepPin2, HIGH);
+      delayMicroseconds(3000);
+      digitalWrite(stepPin1, LOW);
+      digitalWrite(stepPin2, LOW);
+      delayMicroseconds(3000);
+    }
   }
 }
