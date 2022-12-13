@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 // #include <ArduinoBLE.h>
 #include <LiquidCrystal.h>
+=======
+#include <ArduinoBLE.h>
+/* #include <LiquidCrystal.h> */
+>>>>>>> 8298e95 (Integrate more parts)
 #include "path.c"
 
 /*
@@ -35,53 +40,49 @@ const int SELECT_PINS[4] = {19, 20, 21, 22}; // A0, A1, A2, A3
 const int ENABLE_MUX_PINS[4] = {13, 7, 8, 9}; // D13, D7, D8, D9
 const int COM_PIN = 15;
 const int MAGNET_PIN = 6;
-const int dirPin1 = 4;
-const int stepPin1 = 5;
-const int dirPin2 = 2;
-const int stepPin2 = 3;
-const int stepsPerRevolution = 200;
-const int LED_ON_TIME = 500;  // Each LED is on for 0.5s
-// LCD
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
+const int DIR1_PIN = 5;
+const int DIR2_PIN = 3;
+const int STEP1_PIN = 4;
+const int STEP2_PIN = 2;
 
-// BLEService service("4400b98a-0b70-4253-b250-d60e21f0f224");
-// BLEByteCharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite);
+const int STEPS_PER_SQUARE = 500;
+
+BLEService service("4400b98a-0b70-4253-b250-d60e21f0f224");
+BLECharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite, 5);
+
+int loc = 0;
 
 void setup() {
   Serial.begin(9600);
   while (!Serial);
 
-  lcd.begin(16, 2);
-  lcd.print("hello, world!");
-//  setupBLE();
+  setupBLE();
   setupMux();
   setupMagnet();
   setupMotor();
-//  currentState = CONNECT;
 
-//  pinMode(LEDR, OUTPUT);
-//  pinMode(LEDG, OUTPUT);
-//  pinMode(LEDB, OUTPUT);
+  pinMode(LEDR, OUTPUT);
+  pinMode(LEDG, OUTPUT);
+  pinMode(LEDB, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
   driveMotors();
 }
 
 void setupBLE(){
-  // if (!BLE.begin()) {
-  //   Serial.println("starting Bluetooth® Low Energy failed!");
-  //   // digitalWrite(LEDR, HIGH);
-  //   while (1);
-  // }
+  if (!BLE.begin()) {
+    Serial.println("starting Bluetooth® Low Energy failed!");
+    digitalWrite(LEDR, HIGH);
+    while (1);
+  }
 
-  // BLE.setLocalName("AutomatedChess");
-  // BLE.setAdvertisedService(service);
-  // service.addCharacteristic(command);
-  // service.addCharacteristic(currLocCharacteristic);
-  // BLE.addService(service);
-  // currLocCharacteristic.writeValue(0);
-  // BLE.advertise();
+  BLE.setLocalName("AutomatedChess");
+  BLE.setAdvertisedService(service);
+
+  service.addCharacteristic(command);
+  BLE.addService(service);
+
+  BLE.advertise();
 }
 
 void setupMux() {
@@ -101,111 +102,110 @@ void setupMagnet() {
 
 void loop() {
   // Wait until device is connected, check every second and blink built-in led.
-  // BLEDevice central;
-  // while (central = BLE.central(); !central) {
-  //   digitalWrite(LED_BUILTIN, HIGH);
-  //   delay(500);
-  //   digitalWrite(LED_BUILTIN, LOW);
-  //   delay(500);
-  // }
+  BLEDevice central = BLE.central();
 
-  // if (central) {
-  //   Serial.printf("Connected to central: %s\n", central.address());
-  //   digitalWrite(LED_BUILTIN, HIGH);  // turn on the LED to indicate the connection
-  //   while (central.connected()) {
-  //     scanBoard();
-  //     waitAndExecuteCommand();
-  //   }
-  //   digitalWrite(LED_BUILTIN, LOW);  // turn on the LED to indicate the connection
-  //   Serial.printf("Disconnected to central: %s\n", central.address());
-  // }
-  waitAndExecuteCommand();
+  if (central) {
+    Serial.print("Connected to central:");
+    Serial.println(central.address());
+    digitalWrite(LED_BUILTIN, HIGH);  // turn on the LED to indicate the connection
+    scanBoard();
+    printBoard();
+    while (central.connected()) {
+      if (command.written()) {
+        executeCommand();
+        scanBoard();
+        printBoard();
+      }
+    }
+    digitalWrite(LED_BUILTIN, LOW);  // turn on the LED to indicate the connection
+    Serial.print("Disconnected from central");
+  } else {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(500);
+    digitalWrite(LED_BUILTIN, LOW);
+  }
+  delay(500);
 }
 
-void waitAndExecuteCommand() {
-  // while (!command.written());
-  // Serial.println(command.value());
-  String s = Serial.readString();
-  lcd.print(s);
+void executeCommand() {
+  String cmd = (const char*) command.value();
+  // Parses a command like A3-B2 and resolves it as a src and dst integer
+  // between 0 and 63 which corresponds to the cell.
+  int src = to16(cmd[0]-'A' + 8*(cmd[1]-'1'));
+  int dst = to16(cmd[3]-'A' + 8*(cmd[4]-'1'));
 
-  // TODO: parse command such that the following are fully qualified by the command.value()
-  int src = 2;
-  int dst = 9;
+  Serial.println(cmd);
+  Serial.println(src);
+  Serial.println(dst);
 
-  // goto src
-  int queue[64];
-  findPath(dst, src, queue);
+  enum direction path[64];
+  bool capture = board[dst];
 
-  for (int i=0; queue[i] != -1; i++) {
-    // Do something
+  if (capture) {
+    findPath(loc, dst, path);
+    movePath(path);
+    digitalWrite(MAGNET_PIN, HIGH);
+    findPath(to16(dst), 255, path);
+    movePath(path);
+    digitalWrite(MAGNET_PIN, LOW);
+    findPath(255, to16(src), path);
+    movePath(path);
+  } else {
+    findPath(loc, src, path);
+    movePath(path);
+  }
+
+  digitalWrite(MAGNET_PIN, HIGH);
+  findPath(src, dst, path);
+  movePath(path);
+  digitalWrite(MAGNET_PIN, LOW);
+
+  loc = dst;
+}
+
+void movePath(enum direction *path) {
+  while (*path != END) {
+    if (*path == UP) {
+      digitalWrite(DIR1_PIN, HIGH);
+      digitalWrite(DIR2_PIN, HIGH);
+    } // TODO: SO ON AND SO FORTH
+
+    for (int i=0; i<STEPS_PER_SQUARE; i++) {
+      digitalWrite(STEP1_PIN, HIGH);
+      digitalWrite(STEP2_PIN, HIGH);
+      delayMicroseconds(500);
+      digitalWrite(STEP1_PIN, LOW);
+      digitalWrite(STEP2_PIN, LOW);
+      delayMicroseconds(500);
+    }
+
+    path += 1;
   }
 }
-//
-//void waitAndExecuteCommand() {
-//  while (!command.written());
-//  Serial.println(command.value());
-//  lcd.print(command.value());
-//
-//  // TODO: parse command such that the following are fully qualified by the command.value()
-//  int src = 2;
-//  int dst = 9;
-//
-//  // goto src
-//  int queue[64];
-//  findPath(dst, src, queue);
-//
-//  for (int i=0; queue[i] != -1; i++) {
-//    // Do something
-//  }
-//}
 
 /* MUX Survey function. To access each pin:
    1. Loop through the numbers 0-15 in each mux
    2. Select Mux Pin function with pin number
    3. Use AnalogRead to get the value from the pin */
 void scanBoard() {
-//  digitalWrite(LEDB, HIGH);
- for (int square=0; square<64; square++) {
-   for (int i = 0; i < 4; i++)
-     digitalWrite(SELECT_PINS[i], square & (1<<i) ? HIGH : LOW);
-   board[square] = analogRead(COM_PIN);
- }
- digitalWrite(LEDB, LOW);
-}
-
-void driveMotors() {
-  
-  for (int cnt=0; cnt<4; cnt++) {
-    if (cnt==0){
-      digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
-      digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
-    }
-    if (cnt==1){
-      digitalWrite(dirPin1, LOW); // Set motor 1 to clockwise
-      digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
-    }
-    if (cnt==2){
-      digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
-    }
-    if (cnt==3){
-      digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
-      digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
-    }
-    
-    Serial.println("Turning magnet on");
-    digitalWrite(LED_BUILTIN, HIGH);
-    digitalWrite(stepPin1, HIGH);
-    digitalWrite(stepPin2, HIGH);
-    Serial.println(stepPin1);
-    Serial.println(stepPin2);
-    
-    delayMicroseconds(1000);
-    digitalWrite(LED_BUILTIN, LOW);
-    digitalWrite(stepPin1, LOW);
-    digitalWrite(stepPin2, LOW);
-    delayMicroseconds(1000);
+  digitalWrite(LEDB, HIGH);
+  for (int square=0; square<64; square++) {
+    for (int i = 0; i < 4; i++)
+      digitalWrite(SELECT_PINS[i], square & (1<<i) ? HIGH : LOW);
+    board[square] = analogRead(COM_PIN);
   }
-  Serial.println("MAGNET OFF");  
-  digitalWrite(MAGNET_PIN, LOW);
+  digitalWrite(LEDB, LOW);
 }
 
+void printBoard() {
+  Serial.println("");
+  Serial.println("  ABCDEFGH");
+  Serial.println("  --------");
+  for (int row=7; row>=0; row--) {
+    Serial.print(row);
+    Serial.print('|');
+    for (int col=0; col<8; col++)
+      Serial.print(board[row*8+col] ? 'X' : '.');
+    Serial.print('\n');
+  }
+}
