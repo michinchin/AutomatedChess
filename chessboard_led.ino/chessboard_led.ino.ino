@@ -43,14 +43,8 @@ const int stepPin2 = 2;
 const int stepsPerRevolution = 200;
 const int LED_ON_TIME = 500;  // Each LED is on for 0.5s
 int callibrationComplete = 0;
-//ezButton switch1(11);
-//ezButton switch2(10);
-const int switch1 = 11;
-const int switch2 = 10;
-
-// LCD
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+ezButton switch1(11);
+ezButton switch2(10);
 
 const int DIR1_PIN = 5;
 const int DIR2_PIN = 3;
@@ -67,12 +61,7 @@ int loc = 0;
 void setup() {
   Serial.begin(9600);
   while (!Serial);
-
-  lcd.begin(16, 2);
-  lcd.print("hello, world!");
-//  switch1.setDebounceTime(50);
-//  switch2.setDebounceTime(50);
-//  setupBLE();
+  setupBLE();
   setupMux();
   setupMagnet();
   setupMotor();
@@ -83,6 +72,7 @@ void setup() {
   pinMode(LEDG, OUTPUT);
   pinMode(LEDB, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
+  Serial.println("Setup complete.");
   driveMotors();
 }
 
@@ -113,8 +103,8 @@ void setupMux() {
 }
 
 void setupSwitches() {
-  pinMode(switch1, INPUT);
-  pinMode(switch2, INPUT);
+  switch1.setDebounceTime(50);
+  switch2.setDebounceTime(50);
 }
 
 void setupMagnet() {
@@ -129,21 +119,25 @@ void setupMotor() {
   pinMode(stepPin2, OUTPUT);
 }
 
-//void switchCallibration(){
-//  switch1.loop();
-//  switch2.loop();
-//  int pressed1 = switch1.getState();
-//  int pressed2 = switch2.getState();
-// 
-//  if(pressed1 == HIGH) {
-//    callibrationComplete = 1;    
-//  }
-//  if ((callibrationComplete == 1) & pressed2) {
-//    callibrationComplete = 2; 
-//  }
-//  Serial.println("Current callibration status is");
-//  Serial.println(callibrationComplete);
-//}
+void switchCallibration(){
+  Serial.println("Callibration beginning");
+  switch1.loop();
+  switch2.loop();
+  int pressed1 = switch1.getState();
+  int pressed2 = switch2.getState();
+  if(pressed1 == LOW) {
+    callibrationComplete = 1;
+    Serial.println("Button 1 clicked."); 
+  }
+  if ((callibrationComplete == 1) & pressed2 == LOW) {
+    callibrationComplete = 2; 
+    digitalWrite(LEDG, HIGH);
+    Serial.println("Button 2 clicked, callibration complete");
+  }
+  Serial.println("Current callibration status is");
+  Serial.println(callibrationComplete);
+  digitalWrite(LEDG, LOW); 
+}
 
 void loop() {
   // Wait until device is connected, check every second and blink built-in led.
@@ -171,9 +165,7 @@ void loop() {
   }
   delay(500);
   
-  //  switchCallibration();
-  Serial.println("Switch report.");
-  Serial.println(switch1, switch2);
+  switchCallibration();
   if (callibrationComplete == 2) {
     Serial.println("Callibration complete, proceed with game");
   }
