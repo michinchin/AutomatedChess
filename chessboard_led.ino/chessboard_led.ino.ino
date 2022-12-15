@@ -36,44 +36,38 @@ const int SELECT_PINS[4] = {19, 20, 21, 22}; // A0, A1, A2, A3
 const int ENABLE_MUX_PINS[4] = {13, 7, 8, 9}; // D13, D7, D8, D9
 const int COM_PIN = 15;
 const int MAGNET_PIN = 6;
-const int dirPin1 = 5;
-const int stepPin1 = 4;
-const int dirPin2 = 3;
-const int stepPin2 = 2;
-const int stepsPerRevolution = 200;
 const int LED_ON_TIME = 500;  // Each LED is on for 0.5s
-int callibrationComplete = 0;
-ezButton switch1(11);
-ezButton switch2(10);
+
 
 const int DIR1_PIN = 5;
 const int DIR2_PIN = 3;
 const int STEP1_PIN = 4;
 const int STEP2_PIN = 2;
 
-const int STEPS_PER_SQUARE = 500;
+const int STEPS_PER_SQUARE = 220;
 
 BLEService service("4400b98a-0b70-4253-b250-d60e21f0f224");
 BLECharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite, 5);
 
-int loc = 0;
+int loc = 240;
 
 void setup() {
   Serial.begin(9600);
   while (!Serial);
+
+  while (!Serial.available());
   setupBLE();
   setupMux();
   setupMagnet();
   setupMotor();
   setupSwitches();
-//  currentState = CONNECT;
+  switchCalibration();
 
   pinMode(LEDR, OUTPUT);
   pinMode(LEDG, OUTPUT);
   pinMode(LEDB, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.println("Setup complete.");
-  driveMotors();
 }
 
 void setupBLE(){
@@ -103,8 +97,8 @@ void setupMux() {
 }
 
 void setupSwitches() {
-  switch1.setDebounceTime(50);
-  switch2.setDebounceTime(50);
+  pinMode(10, INPUT_PULLUP);
+  pinMode(11, INPUT_PULLUP);
 }
 
 void setupMagnet() {
@@ -113,31 +107,60 @@ void setupMagnet() {
 }
 
 void setupMotor() {
-  pinMode(dirPin1, OUTPUT);
-  pinMode(dirPin2, OUTPUT);
-  pinMode(stepPin1, OUTPUT);
-  pinMode(stepPin2, OUTPUT);
+  pinMode(DIR1_PIN, OUTPUT);
+  pinMode(DIR2_PIN, OUTPUT);
+  pinMode(STEP1_PIN, OUTPUT);
+  pinMode(STEP2_PIN, OUTPUT);
 }
 
-void switchCallibration(){
-  Serial.println("Callibration beginning");
-  switch1.loop();
-  switch2.loop();
-  int pressed1 = switch1.getState();
-  int pressed2 = switch2.getState();
-  if(pressed1 == LOW) {
-    callibrationComplete = 1;
-    Serial.println("Button 1 clicked."); 
+void switchCalibration(){
+  Serial.println("Switch Calibration");
+  digitalWrite(DIR1_PIN, HIGH);
+  digitalWrite(DIR2_PIN, LOW);
+  while (digitalRead(11) == HIGH) { 
+    digitalWrite(STEP1_PIN, HIGH);
+    digitalWrite(STEP2_PIN, HIGH);
+    delayMicroseconds(10000);
+    digitalWrite(STEP1_PIN, LOW);
+    digitalWrite(STEP2_PIN, LOW);
+    delayMicroseconds(10000);
   }
-  if ((callibrationComplete == 1) & pressed2 == LOW) {
-    callibrationComplete = 2; 
-    digitalWrite(LEDG, HIGH);
-    Serial.println("Button 2 clicked, callibration complete");
+
+  digitalWrite(DIR1_PIN, LOW);
+  digitalWrite(DIR2_PIN, LOW);
+  while (digitalRead(10) == HIGH) {
+    digitalWrite(STEP1_PIN, HIGH);
+    digitalWrite(STEP2_PIN, HIGH);
+    delayMicroseconds(10000);
+    digitalWrite(STEP1_PIN, LOW);
+    digitalWrite(STEP2_PIN, LOW);
+    delayMicroseconds(10000);
   }
-  Serial.println("Current callibration status is");
-  Serial.println(callibrationComplete);
-  digitalWrite(LEDG, LOW); 
 }
+
+// int callibrationComplete = 0;
+// ezButton switch1(11);
+// ezButton switch2(10);
+
+// void switchCallibration(){
+//   Serial.println("Callibration beginning");
+//   switch1.loop();
+//   switch2.loop();
+//   int pressed1 = switch1.getState();
+//   int pressed2 = switch2.getState();
+//   if(pressed1 == LOW) {
+//     callibrationComplete = 1;
+//     Serial.println("Button 1 clicked."); 
+//   }
+//   if ((callibrationComplete == 1) & pressed2 == LOW) {
+//     callibrationComplete = 2; 
+//     digitalWrite(LEDG, HIGH);
+//     Serial.println("Button 2 clicked, callibration complete");
+//   }
+//   Serial.println("Current callibration status is");
+//   Serial.println(callibrationComplete);
+//   digitalWrite(LEDG, LOW); 
+// }
 
 void loop() {
   // Wait until device is connected, check every second and blink built-in led.
@@ -147,12 +170,12 @@ void loop() {
     Serial.print("Connected to central:");
     Serial.println(central.address());
     digitalWrite(LED_BUILTIN, HIGH);  // turn on the LED to indicate the connection
-    scanBoard();
+    //scanBoard();
     printBoard();
     while (central.connected()) {
       if (command.written()) {
         executeCommand();
-        scanBoard();
+        //scanBoard();
         printBoard();
       }
     }
@@ -164,11 +187,6 @@ void loop() {
     digitalWrite(LED_BUILTIN, LOW);
   }
   delay(500);
-  
-  switchCallibration();
-  if (callibrationComplete == 2) {
-    Serial.println("Callibration complete, proceed with game");
-  }
 }
 
 void executeCommand() {
@@ -209,18 +227,28 @@ void executeCommand() {
 
 void movePath(enum direction *path) {
   while (*path != END) {
+    Serial.println("MOVE: " + path);
     if (*path == UP) {
+      digitalWrite(DIR1_PIN, LOW);
+      digitalWrite(DIR2_PIN, LOW);
+    } else if (*path == DOWN) {
       digitalWrite(DIR1_PIN, HIGH);
       digitalWrite(DIR2_PIN, HIGH);
-    } // TODO: SO ON AND SO FORTH
+    } else if (*path == LEFT) {
+      digitalWrite(DIR1_PIN, HIGH);
+      digitalWrite(DIR2_PIN, LOW);
+    } else if (*path == RIGHT) {
+      digitalWrite(DIR1_PIN, LOW);
+      digitalWrite(DIR2_PIN, HIGH);
+    }// TODO: SO ON AND SO FORTH
 
     for (int i=0; i<STEPS_PER_SQUARE; i++) {
       digitalWrite(STEP1_PIN, HIGH);
       digitalWrite(STEP2_PIN, HIGH);
-      delayMicroseconds(500);
+      delayMicroseconds(10000);
       digitalWrite(STEP1_PIN, LOW);
       digitalWrite(STEP2_PIN, LOW);
-      delayMicroseconds(500);
+      delayMicroseconds(10000);
     }
 
     path += 1;
@@ -255,37 +283,43 @@ void printBoard() {
 }
 
 
-void driveMotors() {
+// const int dirPin1 = 5;
+// const int stepPin1 = 4;
+// const int dirPin2 = 3;
+// const int stepPin2 = 2;
+// const int stepsPerRevolution = 200;
+// void driveMotors() {
   
-  for (int cnt=0; cnt<4; cnt++) {
-    if (cnt==0){
-      digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
-      digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
-    }
-    if (cnt==1){
-      digitalWrite(dirPin1, LOW); // Set motor 1 to clockwise
-      digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
-    }
-    if (cnt==2){
-      digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
-    }
-    if (cnt==3){
-      digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
-      digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
-    }
+//   for (int cnt=0; cnt<1; cnt++) {
+//     if (cnt==0){
+//       digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
+//       digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
+//     }
+//     if (cnt==1){
+//       digitalWrite(dirPin1, LOW); // Set motor 1 to clockwise
+//       digitalWrite(dirPin2, HIGH);// Set motor 2 to clockwise
+//     }
+//     if (cnt==2){
+//       digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
+//     }
+//     if (cnt==3){
+//       digitalWrite(dirPin1, HIGH); // Set motor 1 to clockwise
+//       digitalWrite(dirPin2, LOW);// Set motor 2 to clockwise
+//     }
 
-    Serial.println("Turning magnet on");
-    digitalWrite(LEDR, HIGH);
-    digitalWrite(LEDB, HIGH);
-    digitalWrite(LEDG, HIGH);
+//     Serial.println("Turning magnet on");
+//     digitalWrite(LEDR, HIGH);
+//     digitalWrite(LEDB, HIGH);
+//     digitalWrite(LEDG, HIGH);
     
-    for (int i=0; i<4*stepsPerRevolution; i++) {
-      digitalWrite(stepPin1, HIGH);
-      digitalWrite(stepPin2, HIGH);
-      delayMicroseconds(3000);
-      digitalWrite(stepPin1, LOW);
-      digitalWrite(stepPin2, LOW);
-      delayMicroseconds(3000);
-    }
-  }
-}
+//     for (int i=0; 1; i++) {
+//       if (i%50 == 0) Serial.println(i);
+//       digitalWrite(stepPin1, HIGH);
+//       digitalWrite(stepPin2, HIGH);
+//       delayMicroseconds(10000);
+//       digitalWrite(stepPin1, LOW);
+//       digitalWrite(stepPin2, LOW);
+//       delayMicroseconds(10000);
+//     }
+//   }
+// }
