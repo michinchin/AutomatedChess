@@ -1,6 +1,5 @@
 #include <ArduinoBLE.h>
 // #include <LiquidCrystal.h>
-#include <ezButton.h>
 #include "path.c"
 
 /*
@@ -32,10 +31,12 @@
 // LEDB = Scan Board
 
 // Pin Definitions
-const int SELECT_PINS[4] = {19, 20, 21, 22}; // A0, A1, A2, A3
+const int SELECT_PINS[4] = {A0, A1, A2, A3}; // A0, A1, A2, A3
 const int ENABLE_MUX_PINS[4] = {13, 7, 8, 9}; // D13, D7, D8, D9
 const int COM_PIN = 15;
 const int MAGNET_PIN = 6;
+const int SWITCH1_PIN = 10;
+const int SWITCH2_PIN = A4;
 const int LED_ON_TIME = 500;  // Each LED is on for 0.5s
 
 
@@ -44,7 +45,7 @@ const int DIR2_PIN = 3;
 const int STEP1_PIN = 4;
 const int STEP2_PIN = 2;
 
-const int STEPS_PER_SQUARE = 220;
+const int STEPS_PER_SQUARE = 200;
 
 BLEService service("4400b98a-0b70-4253-b250-d60e21f0f224");
 BLECharacteristic command("d7a16eff-1ee7-4344-a3d2-a8203d97d75c", BLERead | BLEWrite, 5);
@@ -55,14 +56,20 @@ void setup() {
   Serial.begin(9600);
   while (!Serial);
 
-  while (!Serial.available());
   setupBLE();
-  setupMux();
+  /* setupMux(); */
   setupMagnet();
   setupMotor();
   setupSwitches();
+
+	for (int i=0; i<8; i++)
+		board[i+0] = board[i+8] = board[i+48] = board[i+56] = 1;
+
   switchCalibration();
 
+	digitalWrite(LEDR, LOW);
+	digitalWrite(LEDG, LOW);
+	digitalWrite(LEDB, LOW);
   pinMode(LEDR, OUTPUT);
   pinMode(LEDG, OUTPUT);
   pinMode(LEDB, OUTPUT);
@@ -97,8 +104,8 @@ void setupMux() {
 }
 
 void setupSwitches() {
-  pinMode(10, INPUT_PULLUP);
-  pinMode(11, INPUT_PULLUP);
+  pinMode(SWITCH1_PIN, INPUT_PULLUP);
+  pinMode(SWITCH2_PIN, INPUT_PULLUP);
 }
 
 void setupMagnet() {
@@ -113,58 +120,53 @@ void setupMotor() {
   pinMode(STEP2_PIN, OUTPUT);
 }
 
+inline void stepMotor() {
+	digitalWrite(STEP1_PIN, HIGH);
+	digitalWrite(STEP2_PIN, HIGH);
+	delayMicroseconds(1000);
+	digitalWrite(STEP1_PIN, LOW);
+	digitalWrite(STEP2_PIN, LOW);
+	delayMicroseconds(1000);
+}
+
 void switchCalibration(){
   Serial.println("Switch Calibration");
+
+/* 	while (true) { */
+/* 		Serial.print(digitalRead(SWITCH1_PIN)); */
+/* 		Serial.print(digitalRead(SWITCH2_PIN)); */
+/* 		Serial.println(); */
+/* 		delay(500); */
+/* 	} */
+
   digitalWrite(DIR1_PIN, HIGH);
   digitalWrite(DIR2_PIN, LOW);
-  while (digitalRead(11) == HIGH) { 
-    digitalWrite(STEP1_PIN, HIGH);
-    digitalWrite(STEP2_PIN, HIGH);
-    delayMicroseconds(10000);
-    digitalWrite(STEP1_PIN, LOW);
-    digitalWrite(STEP2_PIN, LOW);
-    delayMicroseconds(10000);
-  }
+  while (digitalRead(SWITCH2_PIN) == HIGH) stepMotor();
+  Serial.println("HIT LEFT");
 
   digitalWrite(DIR1_PIN, LOW);
   digitalWrite(DIR2_PIN, LOW);
-  while (digitalRead(10) == HIGH) {
-    digitalWrite(STEP1_PIN, HIGH);
-    digitalWrite(STEP2_PIN, HIGH);
-    delayMicroseconds(10000);
-    digitalWrite(STEP1_PIN, LOW);
-    digitalWrite(STEP2_PIN, LOW);
-    delayMicroseconds(10000);
-  }
+  while (digitalRead(SWITCH1_PIN) == HIGH) stepMotor();
+  Serial.println("HIT TOP");
+
+	// Create some slack on the left side by moving the trolley to the right by a bit.
+  digitalWrite(DIR1_PIN, LOW);
+  digitalWrite(DIR2_PIN, HIGH);
+  for (int i=0; i<50; i++) stepMotor();
+  digitalWrite(DIR1_PIN, HIGH);
+  digitalWrite(DIR2_PIN, HIGH);
+  for (int i=0; i<30; i++) stepMotor();
 }
 
-// int callibrationComplete = 0;
-// ezButton switch1(11);
-// ezButton switch2(10);
-
-// void switchCallibration(){
-//   Serial.println("Callibration beginning");
-//   switch1.loop();
-//   switch2.loop();
-//   int pressed1 = switch1.getState();
-//   int pressed2 = switch2.getState();
-//   if(pressed1 == LOW) {
-//     callibrationComplete = 1;
-//     Serial.println("Button 1 clicked."); 
-//   }
-//   if ((callibrationComplete == 1) & pressed2 == LOW) {
-//     callibrationComplete = 2; 
-//     digitalWrite(LEDG, HIGH);
-//     Serial.println("Button 2 clicked, callibration complete");
-//   }
-//   Serial.println("Current callibration status is");
-//   Serial.println(callibrationComplete);
-//   digitalWrite(LEDG, LOW); 
-// }
 
 void loop() {
   // Wait until device is connected, check every second and blink built-in led.
   BLEDevice central = BLE.central();
+
+	if (Serial.available()) {
+		executeCommand(Serial.readString());
+		printBoard();
+	}
 
   if (central) {
     Serial.print("Connected to central:");
@@ -174,7 +176,7 @@ void loop() {
     printBoard();
     while (central.connected()) {
       if (command.written()) {
-        executeCommand();
+        executeCommand((const char*) command.value());
         //scanBoard();
         printBoard();
       }
@@ -186,38 +188,51 @@ void loop() {
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
   }
+
   delay(500);
 }
 
-void executeCommand() {
-  String cmd = (const char*) command.value();
+void executeCommand(String cmd) {
   // Parses a command like A3-B2 and resolves it as a src and dst integer
   // between 0 and 63 which corresponds to the cell.
   int src = to16(cmd[0]-'A' + 8*(cmd[1]-'1'));
   int dst = to16(cmd[3]-'A' + 8*(cmd[4]-'1'));
+	
+	if (src < 0 || src >= 256 || dst < 0 || dst >= 245 ) {
+		Serial.println("Invalid command");
+		return;
+	}
 
+	Serial.print("Running Move: ");
   Serial.println(cmd);
-  Serial.println(src);
-  Serial.println(dst);
 
   enum direction path[64];
   bool capture = board[dst];
 
   if (capture) {
+		Serial.println("Move to dst");
     findPath(loc, dst, path);
     movePath(path);
+
+		Serial.println("Move piece to capture jail");
     digitalWrite(MAGNET_PIN, HIGH);
-    findPath(to16(dst), 255, path);
+    findPath(dst, 15, path);
     movePath(path);
     digitalWrite(MAGNET_PIN, LOW);
-    findPath(255, to16(src), path);
+
+		Serial.println("Move to start");
+    findPath(15, src, path);
     movePath(path);
   } else {
+		Serial.println("Move to start");
     findPath(loc, src, path);
     movePath(path);
   }
 
+	Serial.println("Move piece to final location");
   digitalWrite(MAGNET_PIN, HIGH);
+	board[to8(src)] = 0;
+	board[to8(dst)] = 1;
   findPath(src, dst, path);
   movePath(path);
   digitalWrite(MAGNET_PIN, LOW);
@@ -227,7 +242,6 @@ void executeCommand() {
 
 void movePath(enum direction *path) {
   while (*path != END) {
-    Serial.println("MOVE: " + path);
     if (*path == UP) {
       digitalWrite(DIR1_PIN, LOW);
       digitalWrite(DIR2_PIN, LOW);
@@ -240,16 +254,9 @@ void movePath(enum direction *path) {
     } else if (*path == RIGHT) {
       digitalWrite(DIR1_PIN, LOW);
       digitalWrite(DIR2_PIN, HIGH);
-    }// TODO: SO ON AND SO FORTH
-
-    for (int i=0; i<STEPS_PER_SQUARE; i++) {
-      digitalWrite(STEP1_PIN, HIGH);
-      digitalWrite(STEP2_PIN, HIGH);
-      delayMicroseconds(10000);
-      digitalWrite(STEP1_PIN, LOW);
-      digitalWrite(STEP2_PIN, LOW);
-      delayMicroseconds(10000);
     }
+
+    for (int i=0; i<STEPS_PER_SQUARE/2; i++) stepMotor();
 
     path += 1;
   }
@@ -274,7 +281,7 @@ void printBoard() {
   Serial.println("  ABCDEFGH");
   Serial.println("  --------");
   for (int row=7; row>=0; row--) {
-    Serial.print(row);
+    Serial.print(row+1);
     Serial.print('|');
     for (int col=0; col<8; col++)
       Serial.print(board[row*8+col] ? 'X' : '.');

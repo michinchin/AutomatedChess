@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 enum direction {
 	END,
 	UP,
@@ -6,9 +8,9 @@ enum direction {
 	RIGHT,
 };
 
-char queue[1024];
-char board[64];
 enum direction visited[256];
+static char queue[1024];
+static char board[64] = {0};
 static int left = 0;
 static int right = 0;
 
@@ -29,10 +31,12 @@ void add(int x, int y, enum direction mv) {
 	if (x < 0 || 16 <= x) return;
 	if (y < 0 || 16 <= y) return;
 	int sq = x + y*16;
-	if (visited[sq]) return;
+	if (visited[sq] != END) return;
+	visited[sq] = mv;
+
 	int t = to8(sq);
 	if (t != -1 && board[t]) return;
-	visited[sq] = mv;
+
 	queue[right++] = sq;
 }
 
@@ -40,8 +44,8 @@ void add(int x, int y, enum direction mv) {
 void findPath(int dst, int st, enum direction* path) {
 	// Unblock the destination and start squares so that a valid path can be found.
 	// Save the values that were here originally so that we can restore the board state after.
-	int board_st = board[st];
-	int board_dst = board[dst];
+	int board_st = board[to8(st)];
+	int board_dst = board[to8(dst)];
 	board[to8(st)] = 0;
 	board[to8(dst)] = 0;
 
@@ -55,23 +59,21 @@ void findPath(int dst, int st, enum direction* path) {
 		int y = t / 16;
 
 		add(x+1, y, RIGHT);
-		add(x, y+1, DOWN);
+		add(x, y+1, UP);
 		add(x-1, y, LEFT);
-		add(x, y-1, UP);
+		add(x, y-1, DOWN);
 	}
 
 	int cur = dst;
-  	int i = 0;
+	int i = 0;
 
 	while (cur != st) {
-    path[i++] = visited[cur];
-		if (visited[cur] == UP)         cur += 16;
-		else if (visited[cur] == DOWN)  cur -= 16;
-		else if (visited[cur] == RIGHT) cur += 1;
-		else if (visited[cur] == LEFT)  cur -= 1;
+		printf("%d %d\n", cur, visited[cur]);
+		if      (visited[cur] == UP)    { cur -= 16; path[i++] = DOWN; }
+		else if (visited[cur] == DOWN)  { cur += 16; path[i++] = UP; }
+		else if (visited[cur] == RIGHT) { cur -= 1;  path[i++] = LEFT; }
+		else if (visited[cur] == LEFT)  { cur += 1;  path[i++] = RIGHT; }
 	}
-
-  path[i++] = visited[cur];
   path[i] = END;
 
 	board[to8(st)] = board_st;
